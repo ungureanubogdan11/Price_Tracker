@@ -179,10 +179,10 @@ def run_check():
         if new_data.get("best_price", MAX_PRICE) < old_data.get("best_price", MAX_PRICE):
             history[link] = new_data
             
-            msg = f"Price drop for {new_data.get("title", "error")}! New price: {new_data.get("best_price", MAX_PRICE): .2f}."
+            msg = f"Price drop for {new_data.get('title', 'error')}! New price: {new_data.get('best_price', MAX_PRICE): .2f}."
             send_telegram_alert(msg)
 
-            print(f"Price dropped from {float(old_data.get("best_price")) : .2f} to {float(new_data.get("best_price")) : .2f}")
+            print(f"Price dropped from {float(old_data.get("best_price")):.2f} to {float(new_data.get("best_price")):.2f}")
 
     save_history(history)
 
