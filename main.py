@@ -33,6 +33,33 @@ def get_offer_id(product_url: str):
 
     return offer_id
 
+def extract_vouchers(node, targets = None):
+    if targets is None:
+        targets = {
+            "available_vouchers",
+            "vouchers",
+            "voucher",
+            "promotions",
+            "campaign_vouchers",
+            "notification"
+        } 
+    found = []
+
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key in targets:
+                if isinstance(value, list):
+                    found.extend(value)
+                elif isinstance(value, dict):
+                    found.append(value)
+            else:
+                found.extend(extract_vouchers(value, targets))
+    elif isinstance(node, list):
+        for item in node:
+            found.extend(extract_vouchers(item, targets))
+    
+    return found           
+
 def get_vouchers(offer_id):
     # check offer id is good
     url = f"https://sapi.emag.ro/voucher-campaign/product-page/{offer_id}?source_id=7"
@@ -46,8 +73,8 @@ def get_vouchers(offer_id):
     if response.status_code == 200:
         jason = response.json()
         if jason.get("code") == 200 and isinstance(jason.get("data"), dict):
-            vouchers = jason["data"].get("available_vouchers", [])
-            return vouchers
+
+            return extract_vouchers(jason["data"])
         
         if not isinstance(jason.get("data"), dict):
             return []
@@ -126,7 +153,6 @@ def check_price(url) -> dict:
         print()
         print(f"Pret final: {(100 - discount) / 100 * price :.2f}")
     
-    print(max_discount)
     data["voucher_discount"] = max_discount
     data["best_price"] = (100 - max_discount) / 100 * price
     print()
