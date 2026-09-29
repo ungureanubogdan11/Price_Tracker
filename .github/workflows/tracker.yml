@@ -1,8 +1,6 @@
 name: eMAG Price Tracker
 
 on:
-  permissions:
-      contents: write 
   schedule:
     # Runs at 12 am
     - cron: '0 12 * * *'
@@ -11,7 +9,8 @@ on:
 jobs:
   check-prices:
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: write 
 
     steps:
       - name: Check out repository code
