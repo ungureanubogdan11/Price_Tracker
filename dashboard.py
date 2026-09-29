@@ -67,7 +67,7 @@ with col1:
         value=f"{expensive_row['best_price']:.2f} Lei",
         delta=expensive_row['title'][:25] + "..."
     )
-    st.link_button("View", cheapest_row["url"], use_container_width=True)
+    st.link_button("View", expensive_row["url"], use_container_width=True)
 
 with col2:
     st.metric(

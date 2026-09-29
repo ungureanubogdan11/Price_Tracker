@@ -84,7 +84,7 @@ def get_vouchers(offer_id):
     return []
 
 def parse_price(price):
-    return float(price.replace("Lei", "").strip().replace(",", "."))
+    return float(price.replace("Lei", "").strip().replace(",", "").replace(".", "")) / 100
 
 def check_price(url) -> dict:
 
@@ -208,7 +208,7 @@ def run_check():
             msg = f"Price drop for {new_data.get('title', 'error')}! New price: {new_data.get('best_price', MAX_PRICE): .2f}."
             send_telegram_alert(msg)
 
-            print(f"Price dropped from {float(old_data.get('best_price')):.2f} to {float(new_data.get('best_price')):.2f}")
+            print(f"Price dropped from {float(old_data.get('best_price', MAX_PRICE)):.2f} to {float(new_data.get('best_price', MAX_PRICE)):.2f}")
 
     save_history(history)
 
@@ -216,5 +216,12 @@ linkuri = []
 linkuri.append("https://www.emag.ro/legor-ninjago-fierarul-patru-arme-la-a-15-a-aniversare-71858-1259-piese-5702018031995/pd/DJBL1Q3BM/")
 linkuri.append("https://www.emag.ro/set-de-constructie-legor-ninjagor-robotul-de-titan-al-lui-lloyd-la-a-15-a-aniversare-71860-jucarii-pentru-copii-jucarii-pentru-baieti-si-fete-idee-de-cadou-pentru-copii-5702018055694/pd/DXMSW83BM/")
 linkuri.append("https://www.emag.ro/set-de-constructie-legor-ninjagor-robotii-titan-gemeni-71870-jucarii-pentru-copii-jucarii-pentru-baieti-si-fete-idee-de-cadou-pentru-copii-5702018055779/pd/DRP7132BM/")
+linkuri.append("https://www.emag.ro/set-de-constructie-legor-ninjagor-impresionanta-batalie-a-dragonului-71872-jucarii-pentru-copii-jucarii-pentru-baieti-si-fete-idee-de-cadou-pentru-copii-5702018055793/pd/D6P7132BM/")
+linkuri.append("https://www.emag.ro/set-de-constructie-legor-ninjagor-batalia-de-la-sabia-dragonului-71871-jucarii-pentru-copii-jucarii-pentru-baieti-si-fete-idee-de-cadou-pentru-copii-5702018055786/pd/D5P7132BM/")
+linkuri.append("https://www.emag.ro/set-de-constructie-legor-speed-champions-bmw-m3-e30-77263-jucarii-pentru-copii-jucarii-pentru-baieti-si-fete-masini-de-jucarie-idee-de-cadou-pentru-copii-358-piese-5702018068427/pd/DCWDF02BM/")
+linkuri.append("https://www.emag.ro/set-de-constructie-legor-speed-champions-ferrari-499p-77261-jucarii-pentru-copii-jucarii-pentru-baieti-si-fete-masina-de-jucarie-idee-de-cadou-pentru-copii-5702018068403/pd/DFX7132BM/")
+linkuri.append("https://www.emag.ro/set-de-constructie-legor-speed-champions-65-ford-mustang-hoonicorn-v1-al-lui-ken-block-77262-jucarii-pentru-copii-jucarii-pentru-baieti-si-fete-masina-de-jucarie-idee-de-cadou-pentru-copii-57020180684/pd/DJX7132BM/")
+linkuri.append("https://www.emag.ro/set-de-constructie-pentru-adulti-legor-star-warstm-boba-fetttm-75455-decoratiune-pentru-living-idee-de-cadou-pentru-barbati-si-femei-pasionati-de-jocuri-de-constructie-1544-piese-5702018063125/pd/DNWDF02BM/")
+linkuri.append("https://www.emag.ro/legor-star-wars-tm-nava-stelara-a-lui-jango-fett-75433-707-piese-5702017901237/pd/DV05T03BM/")
 
 run_check()
