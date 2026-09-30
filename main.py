@@ -109,9 +109,7 @@ def parse_price(price):
 def check_price(url) -> dict:
 
     SCRAPER_API_KEY = os.environ.get("SCRAPER_API_KEY")
-
-    if SCRAPER_API_KEY:
-        proxy_url = f"http://api.scraperapi.com?api_key={SCRAPER_API_KEY}&url={url}"
+    proxy_url = f"http://api.scraperapi.com?api_key={SCRAPER_API_KEY}&url={url}"
 
     headers = {
     
