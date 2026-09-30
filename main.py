@@ -70,6 +70,7 @@ def extract_vouchers(node, targets = None):
 
 def get_vouchers(offer_id):
     # check offer id is good
+
     url = f"https://sapi.emag.ro/voucher-campaign/product-page/{offer_id}?source_id=7"
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -85,7 +86,10 @@ def get_vouchers(offer_id):
     "Cache-Control": "max-age=0",
     }
 
-    response = requests.get(url = url, headers = headers)
+    SCRAPER_API_KEY = os.environ.get("SCRAPER_API_KEY")
+    proxy_url = f"http://api.scraperapi.com?api_key={SCRAPER_API_KEY}&url={url}"
+
+    response = requests.get(url = proxy_url, headers = headers)
     if response.status_code == 200:
         jason = response.json()
         if jason.get("code") == 200 and isinstance(jason.get("data"), dict):
@@ -104,6 +108,11 @@ def parse_price(price):
 
 def check_price(url) -> dict:
 
+    SCRAPER_API_KEY = os.environ.get("SCRAPER_API_KEY")
+
+    if SCRAPER_API_KEY:
+        proxy_url = f"http://api.scraperapi.com?api_key={SCRAPER_API_KEY}&url={url}"
+
     headers = {
     
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -119,7 +128,7 @@ def check_price(url) -> dict:
     "Cache-Control": "max-age=0",
 }
     response = requests.get(
-    url = url,
+    url = proxy_url,
     headers=headers,
 )
 
