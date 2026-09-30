@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import requests
 from bs4 import BeautifulSoup
 import urllib.parse
@@ -8,26 +9,14 @@ PRICE_HISTORY = "prices.json"
 MAX_PRICE = 1e9
 
 
-def make_proxy_url(target_url):
+def make_proxy_url(target_url, render=False):
     key = os.environ.get("SCRAPER_API_KEY")
     if not key:
         return target_url
     encoded = urllib.parse.quote_plus(target_url)
-    return f"http://api.scraperapi.com?api_key={key}&url={encoded}&country_code=ro&render=true"
+    render_param = "&render=true" if render else ""
+    return f"http://api.scraperapi.com?api_key={key}&url={encoded}&country_code=ro{render_param}"
 
-session = requests.Session()
-session.headers.update({
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-    "Accept-Language": "ro-RO,ro;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Sec-Fetch-User": "?1",
-    "Cache-Control": "max-age=0",
-})
 
 def get_offer_id(soup: BeautifulSoup):
     offer_tag = soup.select_one("[data-offer-id]") or soup.select_one("input[name='offer_id']")
@@ -35,7 +24,8 @@ def get_offer_id(soup: BeautifulSoup):
         return None
     return offer_tag.get("data-offer-id") or offer_tag.get("value")
 
-def extract_vouchers(node, targets = None):
+
+def extract_vouchers(node, targets=None):
     if targets is None:
         targets = {
             "available_vouchers",
@@ -44,7 +34,7 @@ def extract_vouchers(node, targets = None):
             "promotions",
             "campaign_vouchers",
             "notification"
-        } 
+        }
     found = []
 
     if isinstance(node, dict):
@@ -59,27 +49,25 @@ def extract_vouchers(node, targets = None):
     elif isinstance(node, list):
         for item in node:
             found.extend(extract_vouchers(item, targets))
-    
-    return found           
+
+    return found
+
 
 def get_vouchers(offer_id):
+    if not offer_id:
+        return []
+
     url = f"https://sapi.emag.ro/voucher-campaign/product-page/{offer_id}?source_id=7"
-    proxy_url = make_proxy_url(url)
+    proxy_url = make_proxy_url(url, render=False)
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept": "application/json, text/plain, */*",
         "Accept-Language": "ro-RO,ro;q=0.9,en-US;q=0.8,en;q=0.7",
         "Connection": "keep-alive",
-        "Upgrade-Insecure-Requests": "1",
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "none",
-        "Sec-Fetch-User": "?1",
-        "Cache-Control": "max-age=0",
     }
 
     try:
-        response = requests.get(url=proxy_url, headers=headers, timeout=30)
+        response = requests.get(url=proxy_url, headers=headers, timeout=45)
         if response.status_code == 200:
             jason = response.json()
             if jason.get("code") == 200 and isinstance(jason.get("data"), dict):
@@ -87,16 +75,18 @@ def get_vouchers(offer_id):
             if not isinstance(jason.get("data"), dict):
                 return []
         else:
-            print("Offer ID is not correct!")
+            print(f"Offer ID error, status: {response.status_code}")
     except Exception as e:
         print(f"Error fetching vouchers: {e}")
     return []
 
+
 def parse_price(price):
     return float(price.replace("Lei", "").strip().replace(",", "").replace(".", "")) / 100
 
+
 def check_price(url) -> dict:
-    proxy_url = make_proxy_url(url)
+    proxy_url = make_proxy_url(url, render=True)
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -110,21 +100,19 @@ def check_price(url) -> dict:
         "Sec-Fetch-User": "?1",
         "Cache-Control": "max-age=0",
     }
-    
+
     try:
         response = requests.get(
             url=proxy_url,
             headers=headers,
-            timeout=30
+            timeout=60
         )
     except Exception as e:
         print(f"Network error: {e}")
         return {}
 
     if response.status_code != 200:
-        print(f"[!] Access failed: HTTP {response.status_code}")
-        print(f"[!] Target URL was: {proxy_url[:120]}...")
-        print(f"[!] Response body: {response.text[:250]}")
+        print(f"Could not access page. Status: {response.status_code}")
         return {}
 
     soup = BeautifulSoup(response.text, "html.parser")
@@ -133,17 +121,17 @@ def check_price(url) -> dict:
 
     title = soup.select_one("h1")
     if title:
-        data["title"] = title.get_text(strip=True)    
+        data["title"] = title.get_text(strip=True)
         print(title.get_text(strip=True))
     else:
-        print("salut")
+        print("Title not found")
         return {}
-    
+
     price_html = soup.select_one("p.product-new-price")
     if not price_html:
         print("price not found")
         return {}
-        
+
     aux = price_html.get_text(strip=True)
     price = parse_price(aux)
     data["base_price"] = price
@@ -158,31 +146,33 @@ def check_price(url) -> dict:
         discount = voucher["discount_value"]
         max_discount = max(max_discount, discount)
         print(f"Am gasit un voucher de {discount}%!")
-        print(voucher.get("content").get("text"))
-        print()
+        content = voucher.get("content")
+        if isinstance(content, dict):
+            print(content.get("text"))
         print(f"Pret final: {(100 - discount) / 100 * price :.2f}")
-    
+
     data["voucher_discount"] = max_discount
     data["best_price"] = (100 - max_discount) / 100 * price
     print()
 
     return data
 
+
 def send_telegram_alert(message: str):
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
-    
+
     if (bot_token is None) or (chat_id is None):
         return
-    
+
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {
         "chat_id": chat_id,
         "text": message,
-        "parse_mode": "Markdown",  
+        "parse_mode": "Markdown",
         "disable_web_page_preview": False
     }
-    
+
     try:
         response = requests.post(url, json=payload, timeout=10)
         if response.status_code != 200:
@@ -190,31 +180,39 @@ def send_telegram_alert(message: str):
     except requests.exceptions.RequestException as e:
         print(f"[!] Network error sending alert: {e}")
 
-def load_history(filename = "prices.json") -> dict:
+
+def load_history(filename="prices.json") -> dict:
     if not os.path.exists(filename):
         return {}
-    
+
     if os.path.exists(filename) and os.path.getsize(filename) == 0:
         return {}
-    
+
     with open(filename, "r", encoding="utf-8") as f:
         return json.load(f)
-    
-def save_history(data = dict, filename = "prices.json"):
+
+
+def save_history(data=dict, filename="prices.json"):
     with open(filename, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
 
 def run_check():
     history = load_history()
-    
+
     for link in linkuri:
         old_data = history.get(link, {})
         new_data = check_price(link)
-        
+
+        # Retry once if request timed out
+        if not new_data:
+            print("[!] Retrying after network error...")
+            time.sleep(5)
+            new_data = check_price(link)
+
         if not new_data or "best_price" not in new_data:
             continue
-            
+
         old_price = old_data.get("best_price")
         new_price = new_data["best_price"]
 
@@ -222,21 +220,25 @@ def run_check():
             msg = f"Price drop for {new_data.get('title', 'error')}! New price: {new_price: .2f}."
             send_telegram_alert(msg)
             print(f"Price dropped from {float(old_price):.2f} to {float(new_price):.2f}")
-            
+
         history[link] = new_data
+        time.sleep(3)
 
     save_history(history)
 
-linkuri = []
-linkuri.append("https://www.emag.ro/legor-ninjago-fierarul-patru-arme-la-a-15-a-aniversare-71858-1259-piese-5702018031995/pd/DJBL1Q3BM/")
-linkuri.append("https://www.emag.ro/set-de-constructie-legor-ninjagor-robotul-de-titan-al-lui-lloyd-la-a-15-a-aniversare-71860-jucarii-pentru-copii-jucarii-pentru-baieti-si-fete-idee-de-cadou-pentru-copii-5702018055694/pd/DXMSW83BM/")
-linkuri.append("https://www.emag.ro/set-de-constructie-legor-ninjagor-robotii-titan-gemeni-71870-jucarii-pentru-copii-jucarii-pentru-baieti-si-fete-idee-de-cadou-pentru-copii-5702018055779/pd/DRP7132BM/")
-linkuri.append("https://www.emag.ro/set-de-constructie-legor-ninjagor-impresionanta-batalie-a-dragonului-71872-jucarii-pentru-copii-jucarii-pentru-baieti-si-fete-idee-de-cadou-pentru-copii-5702018055793/pd/D6P7132BM/")
-linkuri.append("https://www.emag.ro/set-de-constructie-legor-ninjagor-batalia-de-la-sabia-dragonului-71871-jucarii-pentru-copii-jucarii-pentru-baieti-si-fete-idee-de-cadou-pentru-copii-5702018055786/pd/D5P7132BM/")
-linkuri.append("https://www.emag.ro/set-de-constructie-legor-speed-champions-bmw-m3-e30-77263-jucarii-pentru-copii-jucarii-pentru-baieti-si-fete-masini-de-jucarie-idee-de-cadou-pentru-copii-358-piese-5702018068427/pd/DCWDF02BM/")
-linkuri.append("https://www.emag.ro/set-de-constructie-legor-speed-champions-ferrari-499p-77261-jucarii-pentru-copii-jucarii-pentru-baieti-si-fete-masina-de-jucarie-idee-de-cadou-pentru-copii-5702018068403/pd/DFX7132BM/")
-linkuri.append("https://www.emag.ro/set-de-constructie-legor-speed-champions-65-ford-mustang-hoonicorn-v1-al-lui-ken-block-77262-jucarii-pentru-copii-jucarii-pentru-baieti-si-fete-masina-de-jucarie-idee-de-cadou-pentru-copii-57020180684/pd/DJX7132BM/")
-linkuri.append("https://www.emag.ro/set-de-constructie-pentru-adulti-legor-star-warstm-boba-fetttm-75455-decoratiune-pentru-living-idee-de-cadou-pentru-barbati-si-femei-pasionati-de-jocuri-de-constructie-1544-piese-5702018063125/pd/DNWDF02BM/")
-linkuri.append("https://www.emag.ro/legor-star-wars-tm-nava-stelara-a-lui-jango-fett-75433-707-piese-5702017901237/pd/DV05T03BM/")
 
-run_check()
+linkuri = [
+    "https://www.emag.ro/legor-ninjago-fierarul-patru-arme-la-a-15-a-aniversare-71858-1259-piese-5702018031995/pd/DJBL1Q3BM/",
+    "https://www.emag.ro/set-de-constructie-legor-ninjagor-robotul-de-titan-al-lui-lloyd-la-a-15-a-aniversare-71860-jucarii-pentru-copii-jucarii-pentru-baieti-si-fete-idee-de-cadou-pentru-copii-5702018055694/pd/DXMSW83BM/",
+    "https://www.emag.ro/set-de-constructie-legor-ninjagor-robotii-titan-gemeni-71870-jucarii-pentru-copii-jucarii-pentru-baieti-si-fete-idee-de-cadou-pentru-copii-5702018055779/pd/DRP7132BM/",
+    "https://www.emag.ro/set-de-constructie-legor-ninjagor-impresionanta-batalie-a-dragonului-71872-jucarii-pentru-copii-jucarii-pentru-baieti-si-fete-idee-de-cadou-pentru-copii-5702018055793/pd/D6P7132BM/",
+    "https://www.emag.ro/set-de-constructie-legor-ninjagor-batalia-de-la-sabia-dragonului-71871-jucarii-pentru-copii-jucarii-pentru-baieti-si-fete-idee-de-cadou-pentru-copii-5702018055786/pd/D5P7132BM/",
+    "https://www.emag.ro/set-de-constructie-legor-speed-champions-bmw-m3-e30-77263-jucarii-pentru-copii-jucarii-pentru-baieti-si-fete-masini-de-jucarie-idee-de-cadou-pentru-copii-358-piese-5702018068427/pd/DCWDF02BM/",
+    "https://www.emag.ro/set-de-constructie-legor-speed-champions-ferrari-499p-77261-jucarii-pentru-copii-jucarii-pentru-baieti-si-fete-masina-de-jucarie-idee-de-cadou-pentru-copii-5702018068403/pd/DFX7132BM/",
+    "https://www.emag.ro/set-de-constructie-legor-speed-champions-65-ford-mustang-hoonicorn-v1-al-lui-ken-block-77262-jucarii-pentru-copii-jucarii-pentru-baieti-si-fete-masina-de-jucarie-idee-de-cadou-pentru-copii-57020180684/pd/DJX7132BM/",
+    "https://www.emag.ro/set-de-constructie-pentru-adulti-legor-star-warstm-boba-fetttm-75455-decoratiune-pentru-living-idee-de-cadou-pentru-barbati-si-femei-pasionati-de-jocuri-de-constructie-1544-piese-5702018063125/pd/DNWDF02BM/",
+    "https://www.emag.ro/legor-star-wars-tm-nava-stelara-a-lui-jango-fett-75433-707-piese-5702017901237/pd/DV05T03BM/",
+]
+
+if __name__ == "__main__":
+    run_check()
