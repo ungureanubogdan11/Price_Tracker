@@ -2,9 +2,18 @@ import os
 import json
 import requests
 from bs4 import BeautifulSoup
+import urllib.parse
 
 PRICE_HISTORY = "prices.json"
 MAX_PRICE = 1e9
+
+
+def make_proxy_url(target_url):
+    key = os.environ.get("SCRAPER_API_KEY")
+    if not key:
+        return target_url
+    encoded = urllib.parse.quote_plus(target_url)
+    return f"http://api.scraperapi.com?api_key={key}&url={encoded}"
 
 session = requests.Session()
 session.headers.update({
@@ -21,25 +30,11 @@ session.headers.update({
     "Cache-Control": "max-age=0",
 })
 
-def get_offer_id(product_url: str):
-
-
-    # get main page
-    resp = session.get(product_url)
-    if resp.status_code != 200:
-        return None
-
-    soup = BeautifulSoup(resp.text, "html.parser")
-
-    # get offer id
+def get_offer_id(soup: BeautifulSoup):
     offer_tag = soup.select_one("[data-offer-id]") or soup.select_one("input[name='offer_id']")
     if not offer_tag:
-        print("Could not find offer ID on page.")
         return None
-    
-    offer_id = offer_tag.get("data-offer-id") or offer_tag.get("value")
-
-    return offer_id
+    return offer_tag.get("data-offer-id") or offer_tag.get("value")
 
 def extract_vouchers(node, targets = None):
     if targets is None:
@@ -69,98 +64,91 @@ def extract_vouchers(node, targets = None):
     return found           
 
 def get_vouchers(offer_id):
-    # check offer id is good
-
     url = f"https://sapi.emag.ro/voucher-campaign/product-page/{offer_id}?source_id=7"
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-    "Accept-Language": "ro-RO,ro;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Sec-Fetch-User": "?1",
-    "Cache-Control": "max-age=0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "ro-RO,ro;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Cache-Control": "max-age=0",
     }
 
-    SCRAPER_API_KEY = os.environ.get("SCRAPER_API_KEY")
-    proxy_url = f"http://api.scraperapi.com?api_key={SCRAPER_API_KEY}&url={url}"
-
-    response = requests.get(url = proxy_url, headers = headers)
-    if response.status_code == 200:
-        jason = response.json()
-        if jason.get("code") == 200 and isinstance(jason.get("data"), dict):
-
-            return extract_vouchers(jason["data"])
-        
-        if not isinstance(jason.get("data"), dict):
-            return []
-        
-    else:
-        print("Offer ID is not correct!")
+    try:
+        response = requests.get(url=url, headers=headers, timeout=30)
+        if response.status_code == 200:
+            jason = response.json()
+            if jason.get("code") == 200 and isinstance(jason.get("data"), dict):
+                return extract_vouchers(jason["data"])
+            if not isinstance(jason.get("data"), dict):
+                return []
+        else:
+            print("Offer ID is not correct!")
+    except Exception as e:
+        print(f"Error fetching vouchers: {e}")
     return []
 
 def parse_price(price):
     return float(price.replace("Lei", "").strip().replace(",", "").replace(".", "")) / 100
 
 def check_price(url) -> dict:
-
-    SCRAPER_API_KEY = os.environ.get("SCRAPER_API_KEY")
-    proxy_url = f"http://api.scraperapi.com?api_key={SCRAPER_API_KEY}&url={url}"
+    proxy_url = make_proxy_url(url)
 
     headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "ro-RO,ro;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Cache-Control": "max-age=0",
+    }
     
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-    "Accept-Language": "ro-RO,ro;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Sec-Fetch-User": "?1",
-    "Cache-Control": "max-age=0",
-}
-    response = requests.get(
-    url = proxy_url,
-    headers=headers,
-)
+    try:
+        response = requests.get(
+            url=proxy_url,
+            headers=headers,
+            timeout=30
+        )
+    except Exception as e:
+        print(f"Network error: {e}")
+        return {}
 
     if response.status_code != 200:
         print("Could not access page.")
-        exit()
+        return {}
 
     soup = BeautifulSoup(response.text, "html.parser")
 
     data = {}
 
-    #title
     title = soup.select_one("h1")
     if title:
-        data["title"] = title.get_text(strip = True)    
-        print(title.get_text(strip = True))
+        data["title"] = title.get_text(strip=True)    
+        print(title.get_text(strip=True))
     else:
-        print("ia la muie")
+        print("salut")
+        return {}
     
-    #price
     price_html = soup.select_one("p.product-new-price")
-    aux = price_html.get_text(strip = True)
-    price = parse_price(aux)
-
-    if price_html:
-        data["base_price"] = price
-        print(f"Pret: {price_html.get_text(strip = True)}")
-
-    else:
+    if not price_html:
         print("price not found")
-    
-    #posibil voucher
+        return {}
+        
+    aux = price_html.get_text(strip=True)
+    price = parse_price(aux)
+    data["base_price"] = price
+    print(f"Pret: {price_html.get_text(strip=True)}")
 
-    vouchers = get_vouchers(get_offer_id(url))
+    vouchers = get_vouchers(get_offer_id(soup))
     if len(vouchers) == 0:
         print("Nu am gasit voucher!")
 
@@ -222,13 +210,19 @@ def run_check():
     for link in linkuri:
         old_data = history.get(link, {})
         new_data = check_price(link)
-        if new_data.get("best_price", MAX_PRICE) < old_data.get("best_price", MAX_PRICE):
-            history[link] = new_data
+        
+        if not new_data or "best_price" not in new_data:
+            continue
             
-            msg = f"Price drop for {new_data.get('title', 'error')}! New price: {new_data.get('best_price', MAX_PRICE): .2f}."
-            send_telegram_alert(msg)
+        old_price = old_data.get("best_price")
+        new_price = new_data["best_price"]
 
-            print(f"Price dropped from {float(old_data.get('best_price', MAX_PRICE)):.2f} to {float(new_data.get('best_price', MAX_PRICE)):.2f}")
+        if old_price is not None and new_price < old_price:
+            msg = f"Price drop for {new_data.get('title', 'error')}! New price: {new_price: .2f}."
+            send_telegram_alert(msg)
+            print(f"Price dropped from {float(old_price):.2f} to {float(new_price):.2f}")
+            
+        history[link] = new_data
 
     save_history(history)
 
