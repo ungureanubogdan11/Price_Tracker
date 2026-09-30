@@ -13,14 +13,13 @@ def make_proxy_url(target_url):
     if not key:
         return target_url
     encoded = urllib.parse.quote_plus(target_url)
-    return f"http://api.scraperapi.com?api_key={key}&url={encoded}"
+    return f"http://api.scraperapi.com?api_key={key}&url={encoded}&country_code=ro&render=true"
 
 session = requests.Session()
 session.headers.update({
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
     "Accept-Language": "ro-RO,ro;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Accept-Encoding": "gzip, deflate, br",
     "Connection": "keep-alive",
     "Upgrade-Insecure-Requests": "1",
     "Sec-Fetch-Dest": "document",
@@ -65,6 +64,7 @@ def extract_vouchers(node, targets = None):
 
 def get_vouchers(offer_id):
     url = f"https://sapi.emag.ro/voucher-campaign/product-page/{offer_id}?source_id=7"
+    proxy_url = make_proxy_url(url)
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
@@ -79,7 +79,7 @@ def get_vouchers(offer_id):
     }
 
     try:
-        response = requests.get(url=url, headers=headers, timeout=30)
+        response = requests.get(url=proxy_url, headers=headers, timeout=30)
         if response.status_code == 200:
             jason = response.json()
             if jason.get("code") == 200 and isinstance(jason.get("data"), dict):
@@ -122,7 +122,9 @@ def check_price(url) -> dict:
         return {}
 
     if response.status_code != 200:
-        print("Could not access page.")
+        print(f"[!] Access failed: HTTP {response.status_code}")
+        print(f"[!] Target URL was: {proxy_url[:120]}...")
+        print(f"[!] Response body: {response.text[:250]}")
         return {}
 
     soup = BeautifulSoup(response.text, "html.parser")
